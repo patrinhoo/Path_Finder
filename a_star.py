@@ -1,6 +1,3 @@
-from pathfinding.core.grid import Grid
-from pathfinding.finder.a_star import AStarFinder
-from pathfinding.core.diagonal_movement import DiagonalMovement
 import pygame
 import sys
 import numpy as np
@@ -11,19 +8,119 @@ CELL_HEIGHT = 16
 MENU_WIDTH = 250
 
 
+class Node:
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+
+        self.g = 0.0
+        self.h = 0.0
+        self.f = 0.0
+
+    def __eq__(self, other):
+        return self.position == other.position
+
+
 class PathFinder:
-    def __init__(self, matrix):
+    def __init__(self, matrix, win):
         self.matrix = matrix
-        self.grid = Grid(matrix=matrix)
+        self.win = win
 
     def create_path(self, start, end):
-        start_grid = self.grid.node(start[0], start[1])
-        end_grid = self.grid.node(end[0], end[1])
+        self.start = start
+        self.end = end
+        start_node = Node(None, start)
+        end_node = Node(None, end)
+        open_list = []
+        closed_list = []
 
-        finder = AStarFinder(diagonal_movement=DiagonalMovement.always)
-        path, _ = finder.find_path(start_grid, end_grid, self.grid)
+        open_list.append(start_node)
 
-        return path
+        while len(open_list) > 0:
+            current_node = min(open_list, key=lambda node: node.f)
+            current_index = open_list.index(current_node)
+
+            open_list.pop(current_index)
+            closed_list.append(current_node)
+            self.visualize_lists(open_list, closed_list)
+
+            if current_node == end_node:
+                path = []
+                current = current_node
+                while current is not None:
+                    path.append(current.position)
+                    self.visualize_path(path)
+                    current = current.parent
+                return path[::-1]
+
+            for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                node_position = (
+                    current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+
+                if node_position[0] > (len(self.matrix) - 1) or node_position[0] < 0 or node_position[1] > (len(self.matrix[0]) - 1) or node_position[1] < 0:
+                    continue
+
+                if self.matrix[node_position[0]][node_position[1]] != 1:
+                    continue
+
+                if node_position in [node.position for node in closed_list]:
+                    continue
+
+                new_node = Node(current_node, node_position)
+                new_node.g = new_node.parent.g + np.sqrt(((new_node.position[0] - new_node.parent.position[0])**2) + (
+                    (new_node.position[1] - new_node.parent.position[1]))**2)
+                new_node.h = np.sqrt(((new_node.position[0] - end_node.position[0]) ** 2) + (
+                    (new_node.position[1] - end_node.position[1]) ** 2))
+
+                new_node.f = new_node.g + new_node.h
+
+                if new_node.position not in [node.position for node in open_list]:
+                    open_list.append(new_node)
+                    self.visualize_lists(open_list, closed_list)
+                else:
+                    node_in = [
+                        node for node in open_list if node.position == new_node.position]
+                    if node_in[0].f > new_node.f:
+                        open_list.remove(node_in[0])
+                        open_list.append(new_node)
+                        self.visualize_lists(open_list, closed_list)
+
+    def visualize_path(self, path):
+        if path:
+            color = (255, 80, 255)
+            for path in path[1:-1]:
+                x_pos = MENU_WIDTH + path[1] * CELL_WIDTH + 1
+                y_pos = path[0] * CELL_HEIGHT + 1
+
+                pygame.draw.rect(self.win, color, (x_pos, y_pos,
+                                 CELL_WIDTH - 2, CELL_HEIGHT - 2))
+
+            pygame.display.update()
+            pygame.time.delay(100)
+
+    def visualize_lists(self, open_list, closed_list):
+        if open_list:
+            color = (0, 120, 255)
+            for item in open_list:
+                if item.position != self.start and item.position != self.end:
+                    x_pos = MENU_WIDTH + item.position[1] * CELL_WIDTH + 1
+                    y_pos = item.position[0] * CELL_HEIGHT + 1
+
+                    pygame.draw.rect(
+                        self.win, color, (x_pos, y_pos, CELL_WIDTH - 2, CELL_HEIGHT - 2))
+
+        if closed_list:
+            color = (0, 255, 50)
+            for item in closed_list:
+                if item.position != self.start and item.position != self.end:
+                    x_pos = MENU_WIDTH + item.position[1] * CELL_WIDTH + 1
+                    y_pos = item.position[0] * CELL_HEIGHT + 1
+
+                    pygame.draw.rect(
+                        self.win, color, (x_pos, y_pos, CELL_WIDTH - 2, CELL_HEIGHT - 2))
+
+        pygame.display.update()
+        # pygame.time.delay(100)
 
 
 class Game:
@@ -227,7 +324,7 @@ class Game:
                             self.del_walls = False
                             if self.start:
                                 if self.end:
-                                    pathfinder = PathFinder(self.matrix)
+                                    pathfinder = PathFinder(self.matrix, win)
                                     self.path = pathfinder.create_path(
                                         self.start, self.end)
                                     if not self.path:
@@ -261,11 +358,11 @@ class Game:
             if self.set_walls and mouse_pos[0] >= MENU_WIDTH and ((row, col) != self.start) and ((row, col) != self.end) and clicked:
                 if (row, col) not in self.walls:
                     self.walls.append((row, col))
-                    self.matrix[col][row] = 0
+                    self.matrix[row][col] = 0
             elif self.del_walls and mouse_pos[0] >= MENU_WIDTH and ((row, col) != self.start) and ((row, col) != self.end) and clicked:
                 if (row, col) in self.walls:
                     self.walls.remove((row, col))
-                    self.matrix[col][row] = 1
+                    self.matrix[row][col] = 1
 
             self.draw_items(win)
             pygame.display.update()
