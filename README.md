@@ -3,4 +3,4 @@ This is a simple Path Finder App
 
 ## Test
 If you want to test this app download it from here:
-https://we.tl/t-VOa3kjkS9A
+https://drive.google.com/file/d/19rb_5lmaT5DvepS-tt8UPQSyyE2COOji/view?usp=sharing
